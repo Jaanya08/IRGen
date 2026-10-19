@@ -16,7 +16,15 @@ during parsing. Each class represents a distinct construct in the source grammar
 
 class ASTNode:
     """Base class for all AST nodes."""
-    pass
+
+    def to_dict(self):
+        """
+        Serialize the AST node to a dictionary representation.
+
+        Returns:
+            dict: Structured dictionary representation of the node.
+        """
+        raise NotImplementedError
 
 
 class Number(ASTNode):
@@ -35,6 +43,15 @@ class Number(ASTNode):
             value (str or int): The literal numeric value.
         """
         self.value = value
+
+    def to_dict(self):
+        """
+        Serialize Number node to a dictionary.
+
+        Returns:
+            dict: Dictionary with 'node' and integer 'value'.
+        """
+        return {"node": "Number", "value": int(self.value)}
 
     def __repr__(self):
         """Return developer-friendly string representation of Number."""
@@ -61,6 +78,15 @@ class Identifier(ASTNode):
             name (str): The identifier name.
         """
         self.name = name
+
+    def to_dict(self):
+        """
+        Serialize Identifier node to a dictionary.
+
+        Returns:
+            dict: Dictionary with 'node' and variable 'name'.
+        """
+        return {"node": "Identifier", "name": self.name}
 
     def __repr__(self):
         """Return developer-friendly string representation of Identifier."""
@@ -93,6 +119,20 @@ class BinaryExpression(ASTNode):
         self.left = left
         self.operator = operator
         self.right = right
+
+    def to_dict(self):
+        """
+        Serialize BinaryExpression node to a dictionary.
+
+        Returns:
+            dict: Dictionary with 'node', 'operator', and nested 'left' and 'right' dicts.
+        """
+        return {
+            "node": "BinaryExpression",
+            "operator": self.operator,
+            "left": self.left.to_dict(),
+            "right": self.right.to_dict(),
+        }
 
     def __repr__(self):
         """Return developer-friendly string representation of BinaryExpression."""
@@ -128,6 +168,19 @@ class Assignment(ASTNode):
         self.name = name
         self.expression = expression
 
+    def to_dict(self):
+        """
+        Serialize Assignment node to a dictionary.
+
+        Returns:
+            dict: Dictionary with 'node', 'name', and nested 'expression' dict.
+        """
+        return {
+            "node": "Assignment",
+            "name": self.name,
+            "expression": self.expression.to_dict(),
+        }
+
     def __repr__(self):
         """Return developer-friendly string representation of Assignment."""
         return f"Assignment('{self.name}', {self.expression})"
@@ -158,6 +211,18 @@ class Program(ASTNode):
         """
         self.statements = statements
 
+    def to_dict(self):
+        """
+        Serialize Program node to a dictionary.
+
+        Returns:
+            dict: Dictionary with 'node' and list of nested statement dicts.
+        """
+        return {
+            "node": "Program",
+            "statements": [stmt.to_dict() for stmt in self.statements],
+        }
+
     def __repr__(self):
         """Return developer-friendly string representation of Program."""
         return f"Program({self.statements})"
@@ -183,6 +248,18 @@ class Block(ASTNode):
             statements (list of ASTNode): Sequence of statements in the block.
         """
         self.statements = statements
+
+    def to_dict(self):
+        """
+        Serialize Block node to a dictionary.
+
+        Returns:
+            dict: Dictionary with 'node' and list of nested statement dicts.
+        """
+        return {
+            "node": "Block",
+            "statements": [stmt.to_dict() for stmt in self.statements],
+        }
 
     def __repr__(self):
         """Return developer-friendly string representation of Block."""
@@ -215,6 +292,20 @@ class If(ASTNode):
         self.condition = condition
         self.then_block = then_block
         self.else_block = else_block
+
+    def to_dict(self):
+        """
+        Serialize If node to a dictionary.
+
+        Returns:
+            dict: Dictionary with 'node', 'condition', 'then_block', and 'else_block' (or None).
+        """
+        return {
+            "node": "If",
+            "condition": self.condition.to_dict(),
+            "then_block": self.then_block.to_dict(),
+            "else_block": self.else_block.to_dict() if self.else_block is not None else None,
+        }
 
     def __repr__(self):
         """Return developer-friendly string representation of If."""
@@ -249,6 +340,19 @@ class While(ASTNode):
         """
         self.condition = condition
         self.body = body
+
+    def to_dict(self):
+        """
+        Serialize While node to a dictionary.
+
+        Returns:
+            dict: Dictionary with 'node', 'condition', and 'body'.
+        """
+        return {
+            "node": "While",
+            "condition": self.condition.to_dict(),
+            "body": self.body.to_dict(),
+        }
 
     def __repr__(self):
         """Return developer-friendly string representation of While."""

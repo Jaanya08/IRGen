@@ -245,9 +245,12 @@ Labels, gotos and ifFalse are never removed.
 | `x = a * 1 + 0;` | `x = a` |
 | `a = 5; b = a * 2;` | `a = 5` / `b = 10` |
 | `x = a * b; y = a * b;` | `t1 = a * b` / `x = t1` / `y = t1` |
-| `while (a < b) { x = 2 * 3; a = a + 1; }` | `L1:` / `t1 = a < b` / `ifFalse t1 goto L2` / `x = 6` / `t3 = a + 1` / `a = t3` / `goto L1` / `L2:` (the loop condition and `a` must NOT be folded) |
+| `while (a < b) { x = 2 * 3; a = a + 1; }` | `L1:` / `t1 = a < b` / `ifFalse t1 goto L2` / `x = 6` / `a = a + 1` / `goto L1` / `L2:` |
 
-(Temp numbers in results are whatever remains after removal; do not renumber.)
+Notes:
+- Temp numbers are whatever remains after removal; do not renumber.
+- In the loop row, the condition `t1 = a < b` must stay, and `a` must not be treated as a constant.
+- Propagation never crosses a label, jump or ifFalse.
 
 ### codegen.py
 `generate_asm(lines)` returns assembly lines. Variables live in memory; R1 and R2
