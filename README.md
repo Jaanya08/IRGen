@@ -1,24 +1,38 @@
 # IRGen: A Lightweight Intermediate Code Generation System Using Three-Address Code
 
 ## Overview
-IRGen is a lightweight compiler front-end built in Python using standard library modules only. It converts statements and control-flow constructs in a custom programming language into machine-independent Three-Address Code (TAC). The system demonstrates core compiler concepts including lexical analysis, recursive descent parsing, Abstract Syntax Tree (AST) construction, and intermediate representation generation with control flow.
+IRGen is a lightweight compiler front-end and intermediate representation system built in Python using standard library modules only. It converts statements and control-flow constructs in a custom programming language into machine-independent Three-Address Code (TAC), optimizes the TAC through multiple iterative passes, executes TAC via a built-in interpreter, and generates target assembly for an imaginary register machine.
 
 ## Pipeline
 ```
-Source -> Lexer -> Tokens -> Parser -> AST -> IR Generator -> TAC
+Source -> Lexer -> Tokens -> Parser -> AST -> IR Generator -> TAC -> Optimizer -> Assembly
+                                                │
+                                                └──> TAC Interpreter (Execution & Testing)
 ```
 
-## Supported Features (Phase 1 & Phase 2)
-- **Integer numbers**: Decimal integer literals (e.g., `10`, `25`).
-- **Identifiers**: Variable names matching `[A-Za-z_][A-Za-z0-9_]*`.
-- **Arithmetic Operators**: Binary operators (`+`, `-`, `*`, `/`) with precedence (`*`, `/` over `+`, `-`) and left-associativity.
+## Features
+
+### Front-End & Control Flow (Phases 1 & 2)
+- **Integer numbers**: Decimal integer literals (e.g., `10`, `25`, negative literals `-3`).
+- **Identifiers**: Variable names matching `[A-Za-z_][A-Za-z0-9_]*` (compiler temporaries `t[0-9]+` reserved).
+- **Arithmetic Operators**: Binary operators (`+`, `-`, `*`, `/`) with standard precedence (`*`, `/` over `+`, `-`) and left-associativity.
 - **Relational Operators**: Comparisons (`<`, `>`, `<=`, `>=`, `==`, `!=`).
-- **Assignments**: Variable assignments (`x = expr;`).
-- **Blocks & Grouping**: Statement blocks enclosed in braces `{ ... }` and parenthesized sub-expressions `( ... )`.
-- **Conditionals**: `if (cond) { ... }` and `if (cond) { ... } else { ... }`.
-- **Loops**: `while (cond) { ... }`.
-- **Sequential Statements**: Multi-statement programs and nested control-flow constructs.
-- **TAC Emission**: Machine-independent instructions with separate temp (`t1`, `t2`, ...) and label (`L1`, `L2`, ...) counters, conditional jumps (`ifFalse tN goto Lx`), unconditional jumps (`goto Lx`), and label targets (`Lx:`).
+- **Assignments & Blocks**: Statements terminated by `;`, blocks enclosed in `{ ... }`, parenthesized sub-expressions `( ... )`.
+- **Conditionals & Loops**: `if (cond) { ... }`, `if (cond) { ... } else { ... }`, and `while (cond) { ... }`.
+- **TAC Emission**: Instruction representations with dedicated temp (`t1`, `t2`, ...) and label (`L1`, `L2`, ...) counters, conditional jumps (`ifFalse tN goto Lx`), unconditional jumps (`goto Lx`), and labels (`Lx:`).
+
+### Optimization & Code Generation (Phase 3)
+- **TAC Parser & Formatter (`irgen/tac.py`)**: Structured representation of TAC instructions supporting round-trip formatting.
+- **TAC Interpreter (`irgen/interpreter.py`)**: Direct execution of TAC with environment tracking, integer division, relational evaluations, and step limits.
+- **6-Pass Fixpoint Optimizer (`irgen/optimizer.py`)**: Iterates passes repeatedly until reaching a fixpoint (max 20 rounds):
+  1. *Constant Folding*: Pre-computes arithmetic and relational operations on constants (protects against division by zero).
+  2. *Algebraic Simplification*: Simplifies identities (`x*1`, `x+0`, `x-0`, `x/1` -> `x`; `x*0` -> `0`).
+  3. *Constant & Copy Propagation*: Propagates known values inside basic blocks; resets at labels/jumps.
+  4. *Common Subexpression Elimination (CSE)*: Eliminates duplicate binary computations within basic blocks; handles commutative operators (`+`, `*`, `==`, `!=`).
+  5. *Copy Fusion*: Merges single-use temporary definitions into destination variable assignments.
+  6. *Dead Temporary Elimination*: Removes dead temporaries (`tN = ...`) not referenced elsewhere.
+- **Assembly Codegen (`irgen/codegen.py`)**: Emits assembly instructions for an imaginary register machine using scratch registers `R1` and `R2`, immediate operands (`#N`), memory variables, and jump instructions.
+- **AST Serialization**: `to_dict()` methods on all AST nodes for clean JSON export.
 
 ## Project Structure
 ```
@@ -26,53 +40,67 @@ IRGen/
 ├── .gitignore
 ├── AGENTS.md
 ├── README.md
-├── main.py
+├── main.py                 # CLI interface
 ├── docs/
 ├── examples/
 │   ├── ifelse.txt
 │   └── loop.txt
 ├── irgen/
 │   ├── __init__.py
-│   ├── ast_nodes.py
-│   ├── codegen.py          # (Phase 3)
-│   ├── ir_generator.py
-│   ├── lexer.py
-│   ├── optimizer.py        # (Phase 3)
-│   └── parser.py
+│   ├── ast_nodes.py        # AST nodes with to_dict() export
+│   ├── codegen.py          # TAC to assembly generator
+│   ├── interpreter.py      # TAC runtime interpreter
+│   ├── ir_generator.py     # AST to TAC generator
+│   ├── lexer.py            # Tokenizer
+│   ├── optimizer.py        # 6-pass optimization engine
+│   ├── parser.py           # Recursive descent parser
+│   └── tac.py              # TAC instruction parser/formatter
 ├── tests/
-│   ├── test_cases.py       # Phase 1 tests
-│   └── test_control_flow.py # Phase 2 tests
-└── visualizer/             # (Phase 3)
+│   ├── test_cases.py       # Phase 1 expression & error tests
+│   ├── test_codegen.py     # Phase 3 assembly codegen tests
+│   ├── test_control_flow.py# Phase 2 control flow & block tests
+│   ├── test_interpreter.py # Phase 3 TAC interpreter tests
+│   └── test_optimizer.py   # Phase 3 optimizer & equivalence tests
+└── visualizer/             # (future)
 ```
 
 ## How to Run
 
-### 1. From a File
-Pass a source file path as a command-line argument:
+### Command-Line Interface (`main.py`)
+
+Run `main.py` by providing an optional source file path or interactively via standard input:
 
 ```bash
+# Basic run (displays tokens and unoptimized TAC)
 python main.py examples/loop.txt
+
+# Run with optimization, assembly codegen, and instruction statistics
+python main.py examples/loop.txt --optimize --asm --stats
+
+# Output structured JSON (tokens, AST, TAC, optimized TAC, log, assembly, stats)
+python main.py examples/loop.txt --json
 ```
 
-or:
+### CLI Flags
 
-```bash
-python main.py examples/ifelse.txt
-```
-
-### 2. Interactive Multi-line Input
-Run without arguments to enter source code directly into the terminal. Finish input by pressing Enter on an empty line:
-
-```bash
-python main.py
-```
+| Flag | Description |
+|---|---|
+| `<file>` | Optional path to input file. If omitted, reads from stdin until an empty line. |
+| `--optimize` | Runs the 6-pass optimizer and displays optimized TAC. |
+| `--asm` | Generates and prints assembly for an imaginary register machine. |
+| `--stats` | Displays instruction count metrics before and after optimization. |
+| `--json` | Emits a single JSON object with compiler stages or error details. |
 
 ## Examples
 
-### Example 1: Arithmetic Expression
+### Example 1: Arithmetic Expression with Optimization & Assembly
+Running:
+```bash
+python main.py --optimize --asm --stats
+```
 Input:
 ```text
-x = a + b * c;
+x = 2 * 3 + a;
 ```
 
 Output:
@@ -80,21 +108,35 @@ Output:
 TOKENS:
 ('ID', 'x')
 ('ASSIGN', '=')
-('ID', 'a')
-('OP', '+')
-('ID', 'b')
+('NUMBER', '2')
 ('OP', '*')
-('ID', 'c')
+('NUMBER', '3')
+('OP', '+')
+('ID', 'a')
 ('SEMICOLON', ';')
 
 THREE-ADDRESS CODE:
-t1 = b * c
-t2 = a + t1
+t1 = 2 * 3
+t2 = t1 + a
 x = t2
+
+OPTIMIZED TAC:
+x = 6 + a
+
+ASSEMBLY:
+LOAD R1, #6
+LOAD R2, a
+ADD R1, R2
+STORE x, R1
+
+STATS:
+Instructions before: 3
+Instructions after:  1
+Removed: 2
 ```
 
 ### Example 2: Control Flow (`while` loop)
-Running `python main.py examples/loop.txt`:
+Running `python main.py examples/loop.txt --optimize --asm --stats`:
 
 ```text
 TOKENS:
@@ -121,58 +163,52 @@ t2 = a + 1
 a = t2
 goto L1
 L2:
-```
 
-### Example 3: Conditional Branch (`if-else`)
-Running `python main.py examples/ifelse.txt`:
-
-```text
-TOKENS:
-('KEYWORD', 'if')
-('LPAREN', '(')
-('ID', 'a')
-('RELOP', '>')
-('ID', 'b')
-('RPAREN', ')')
-('LBRACE', '{')
-('ID', 'x')
-('ASSIGN', '=')
-('ID', 'a')
-('SEMICOLON', ';')
-('RBRACE', '}')
-('KEYWORD', 'else')
-('LBRACE', '{')
-('ID', 'x')
-('ASSIGN', '=')
-('ID', 'b')
-('SEMICOLON', ';')
-('RBRACE', '}')
-
-THREE-ADDRESS CODE:
-t1 = a > b
-ifFalse t1 goto L1
-x = a
-goto L2
+OPTIMIZED TAC:
 L1:
-x = b
+t1 = a < b
+ifFalse t1 goto L2
+a = a + 1
+goto L1
 L2:
+
+ASSEMBLY:
+L1:
+LOAD R1, a
+LOAD R2, b
+CMPLT R1, R2
+STORE t1, R1
+LOAD R1, t1
+JZ R1, L2
+LOAD R1, a
+LOAD R2, #1
+ADD R1, R2
+STORE a, R1
+JMP L1
+L2:
+
+STATS:
+Instructions before: 7
+Instructions after:  6
+Removed: 1
 ```
 
 ## Running Tests
-Run all unit tests across both phases using Python's standard `unittest` test runner:
+
+Run the full test suite with Python's standard `unittest` discovery runner:
 
 ```bash
 python -m unittest discover tests -v
 ```
 
-All 19 tests (7 Phase 1 + 12 Phase 2) should report `OK`.
+All 62 tests across all phases pass:
+- **`tests/test_cases.py`** (7 tests): Lexer, parser, and basic expressions.
+- **`tests/test_control_flow.py`** (13 tests): Conditionals, while loops, blocks, reserved temp validation.
+- **`tests/test_interpreter.py`** (7 tests): TAC execution semantics, relational evaluation, step limits, errors.
+- **`tests/test_optimizer.py`** (16 tests): All 6 optimization passes, fixpoint iterations, expected results, idempotence, randomized semantic equivalence.
+- **`tests/test_codegen.py`** (19 tests): Assembly generation, scratch register allocation, immediates, jump conditions, comparison opcodes.
 
 ## Current Status
 - **Phase 1 (Expressions & Assignments)**: Complete.
 - **Phase 2 (Control Flow & Multi-statement Programs)**: Complete.
-
-## Planned Features (Phase 3)
-The following features are planned for future development:
-- IR optimization (constant folding, dead-code elimination, algebraic simplification).
-- Target code generation.
-- Interactive IR / AST visualizer.
+- **Phase 3 (Optimization, Codegen, Interpreter & CLI Export)**: Complete.
