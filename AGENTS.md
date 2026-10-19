@@ -192,6 +192,82 @@ L2:
 ### CLI
 `main.py` accepts an optional file path (`python main.py examples/loop.txt`). With no argument, it reads multiple lines from the terminal until an empty line.
 
-## Phase 3 — future (do NOT build yet)
+## Phase 3 — optimization, codegen, export (build this now)
 
-Optimization (constant folding, dead-code elimination), IR visualization, target code generation.
+Phases 1 and 2 must keep working. All 19 existing tests must keep passing.
+Python 3 standard library only.
+
+### New files (add to structure)
+```
+irgen/tac.py          # parse TAC strings into Instruction objects and format them back
+irgen/interpreter.py  # run TAC to verify behaviour
+irgen/optimizer.py    # optimization passes
+irgen/codegen.py      # TAC -> assembly for an imaginary register machine
+tests/test_optimizer.py, tests/test_codegen.py, tests/test_interpreter.py
+```
+
+### tac.py
+Instruction kinds: label (`L1:`), goto (`goto L1`), ifFalse (`ifFalse t1 goto L1`),
+copy (`x = y`), binary (`t1 = a + b`, ops: + - * / < > <= >= == !=).
+`parse_tac(lines)` returns a list of Instruction; `format_tac(instrs)` returns strings.
+parse then format must give back the original lines. A name is a temp if it matches `t\d+`.
+
+### interpreter.py
+`run_tac(lines, env=None, max_steps=10000)` executes TAC and returns the final
+variable dictionary. Relational ops give 1 or 0. `/` is integer (floor) division.
+Division by zero raises ZeroDivisionError. Exceeding max_steps raises RuntimeError.
+Unset variables are an error (NameError) unless provided in env.
+
+### optimizer.py
+`optimize(lines)` returns `(optimized_lines, log)` where log is a list of
+`{"pass": name, "before": [...], "after": [...]}` recorded only when a pass changed something.
+Run all passes repeatedly until nothing changes (max 20 rounds). Passes:
+1. Constant folding: `t1 = 2 * 3` -> `t1 = 6`; relational ops fold to 1 or 0.
+   Never fold division by zero (leave it unchanged).
+2. Algebraic simplification: `x*1`, `1*x`, `x+0`, `0+x`, `x-0`, `x/1` -> copy of x; `x*0`, `0*x` -> 0.
+3. Constant and copy propagation inside a basic block. A basic block ends at
+   any label, goto or ifFalse. Forget all known values at every label and after
+   every jump. Forget a variable's known value when it is reassigned. Never
+   propagate across a label (loops would break).
+4. Common subexpression elimination inside a basic block: if the same
+   `a op b` is computed again and neither a nor b was reassigned in between,
+   replace the second computation with a copy of the first result.
+5. Copy fusion: `tN = expr` immediately followed by `x = tN`, where tN is used
+   nowhere else, becomes `x = expr`.
+6. Dead temp elimination: delete `tN = ...` when tN is never read anywhere.
+   Never delete assignments to user variables (non-temps).
+Labels, gotos and ifFalse are never removed.
+
+### Expected results
+| Source | Optimized TAC |
+|---|---|
+| `x = 2 * 3 + a;` | `x = 6 + a` |
+| `x = a * 1 + 0;` | `x = a` |
+| `a = 5; b = a * 2;` | `a = 5` / `b = 10` |
+| `x = a * b; y = a * b;` | `t1 = a * b` / `x = t1` / `y = t1` |
+| `while (a < b) { x = 2 * 3; a = a + 1; }` | `L1:` / `t1 = a < b` / `ifFalse t1 goto L2` / `x = 6` / `t3 = a + 1` / `a = t3` / `goto L1` / `L2:` (the loop condition and `a` must NOT be folded) |
+
+(Temp numbers in results are whatever remains after removal; do not renumber.)
+
+### codegen.py
+`generate_asm(lines)` returns assembly lines. Variables live in memory; R1 and R2
+are scratch registers. Immediates are written `#6`.
+```
+t1 = b * c      ->  LOAD R1, b / LOAD R2, c / MUL R1, R2 / STORE t1, R1
+x = t1          ->  LOAD R1, t1 / STORE x, R1
+x = 6           ->  LOAD R1, #6 / STORE x, R1
+t1 = a < b      ->  LOAD R1, a / LOAD R2, b / CMPLT R1, R2 / STORE t1, R1
+ifFalse t1 goto L1  ->  LOAD R1, t1 / JZ R1, L1
+goto L2         ->  JMP L2
+L1:             ->  L1:
+```
+Opcodes: ADD SUB MUL DIV, CMPLT CMPGT CMPLE CMPGE CMPEQ CMPNE (leave 1 or 0 in R1).
+
+### Export and CLI
+Add `to_dict()` to every AST node (`{"node": "BinaryExpression", ...}` with children nested).
+`main.py` flags: `--optimize`, `--asm`, `--json`, `--stats`. Examples:
+`python main.py examples/loop.txt --optimize --asm --stats`
+`--stats` prints instruction counts before and after optimization.
+`--json` prints one JSON object with keys: tokens, ast, tac, optimized_tac,
+optimization_log, assembly, stats. On error print `{"error": "<message>"}`.
+Without flags, behave exactly as before.

@@ -22,6 +22,7 @@ from irgen.ast_nodes import (
     Assignment, BinaryExpression, Block, Identifier, If,
     Number, Program, While,
 )
+from irgen.tac import is_temp
 
 
 class Parser:
@@ -273,10 +274,13 @@ class Parser:
             SyntaxError: If the ID, '=', expression, or ';' is missing.
         """
         id_token = self.consume('ID')
+        name = id_token[1]
+        if is_temp(name):
+            raise SyntaxError(f"'{name}' is reserved for compiler temporaries")
         self.consume('ASSIGN', '=')
         expr_node = self.expression()
         self.consume('SEMICOLON', ';')
-        return Assignment(id_token[1], expr_node)
+        return Assignment(name, expr_node)
 
     def expression(self):
         """
@@ -338,6 +342,8 @@ class Parser:
             return Number(tok_val)
         elif tok_type == 'ID':
             self.consume('ID')
+            if is_temp(tok_val):
+                raise SyntaxError(f"'{tok_val}' is reserved for compiler temporaries")
             return Identifier(tok_val)
         elif tok_type == 'LPAREN':
             self.consume('LPAREN', '(')

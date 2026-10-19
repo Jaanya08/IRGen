@@ -149,6 +149,13 @@ class TestControlFlow(unittest.TestCase):
             tokens = tokenize(code)
             Parser(tokens).parse()
 
+    def test_error_reserved_temporary_name(self):
+        """Test SyntaxError is raised when assigning to a reserved compiler temporary name."""
+        code = "t1 = 5;"
+        with self.assertRaises(SyntaxError):
+            tokens = tokenize(code)
+            Parser(tokens).parse()
+
     def test_lexer_relop_two_characters(self):
         """Test that two-character relational operators (>=, ==) are matched as single RELOP tokens."""
         tokens_gte = tokenize(">=")
