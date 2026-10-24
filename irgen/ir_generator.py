@@ -15,7 +15,7 @@ TAC patterns emitted:
 """
 
 from irgen.ast_nodes import (
-    Assignment, BinaryExpression, Block, Identifier, If,
+    Assignment, BinaryExpression, Block, For, Identifier, If,
     Number, Program, While,
 )
 
@@ -164,6 +164,9 @@ class IRGenerator:
         elif isinstance(node, While):
             return self._generate_while(node)
 
+        elif isinstance(node, For):
+            return self._generate_for(node)
+
         else:
             raise TypeError(f"Unknown AST node type: {type(node).__name__}")
 
@@ -251,6 +254,47 @@ class IRGenerator:
         cond_temp = self.generate(node.condition)
         self._emit_if_false(cond_temp, l_end)
         self.generate(node.body)
+        self._emit_goto(l_start)
+        self._emit_label(l_end)
+
+        return None
+
+    def _generate_for(self, node):
+        """
+        Emit TAC for a For node.
+
+        Pattern:
+            <init>
+            Lstart:
+            <condition>
+            ifFalse tN goto Lend
+            <body>
+            <update>
+            goto Lstart
+            Lend:
+
+        Both loop labels are allocated before condition, body, and update so that
+        any nested constructs receive strictly higher label numbers.
+
+        Args:
+            node (For): The For AST node to generate IR for.
+
+        Returns:
+            None
+        """
+        if node.init is not None:
+            self.generate(node.init)
+
+        l_start = self.new_label()
+        l_end = self.new_label()
+
+        self._emit_label(l_start)
+        if node.condition is not None:
+            cond_temp = self.generate(node.condition)
+            self._emit_if_false(cond_temp, l_end)
+        self.generate(node.body)
+        if node.update is not None:
+            self.generate(node.update)
         self._emit_goto(l_start)
         self._emit_label(l_end)
 

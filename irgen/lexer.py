@@ -4,7 +4,7 @@ Lexical analyzer (lexer) for IRGen.
 This module converts raw source code into a list of token tuples (TYPE, value).
 Supported token types:
 - NUMBER: Integer numeric literals (e.g., 10, 25)
-- KEYWORD: Control flow keywords ('if', 'else', 'while')
+- KEYWORD: Control flow keywords ('if', 'else', 'while', 'for')
 - ID: Variable identifiers ([A-Za-z_][A-Za-z0-9_]*)
 - RELOP: Relational operators (<=, >=, ==, !=, <, >)
 - OP: Arithmetic operators (+, -, *, /)
@@ -34,7 +34,7 @@ def tokenize(code):
     """
     token_patterns = [
         ('NUMBER', r'\d+'),
-        ('KEYWORD', r'\b(?:if|else|while)\b'),
+        ('KEYWORD', r'\b(?:if|else|while|for)\b'),
         ('ID', r'[A-Za-z_][A-Za-z0-9_]*'),
         ('RELOP', r'<=|>=|==|!=|<|>'),
         ('OP', r'[+\-*/]'),

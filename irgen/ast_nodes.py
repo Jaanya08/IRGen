@@ -11,6 +11,7 @@ during parsing. Each class represents a distinct construct in the source grammar
 - Block: Represents a block of statements enclosed in braces { ... }.
 - If: Represents an if / if-else conditional branch.
 - While: Represents a while loop statement.
+- For: Represents a for loop statement.
 """
 
 
@@ -363,5 +364,61 @@ class While(ASTNode):
         return (
             isinstance(other, While)
             and self.condition == other.condition
+            and self.body == other.body
+        )
+
+
+class For(ASTNode):
+    """
+    AST node representing a for loop statement.
+
+    Attributes:
+        init (ASTNode or None): Loop initialization statement or expression (or None).
+        condition (ASTNode or None): Loop condition expression (or None).
+        update (ASTNode or None): Loop update statement or expression (or None).
+        body (Block): Block of statements to execute iteratively within the loop.
+    """
+
+    def __init__(self, init, condition, update, body):
+        """
+        Initialize a For node.
+
+        Args:
+            init (ASTNode or None): Initialization statement/expression.
+            condition (ASTNode or None): Loop condition expression.
+            update (ASTNode or None): Loop update statement/expression.
+            body (Block): Loop body block.
+        """
+        self.init = init
+        self.condition = condition
+        self.update = update
+        self.body = body
+
+    def to_dict(self):
+        """
+        Serialize For node to a dictionary.
+
+        Returns:
+            dict: Dictionary with 'node', 'init', 'condition', 'update', and 'body'.
+        """
+        return {
+            "node": "For",
+            "init": self.init.to_dict() if self.init is not None else None,
+            "condition": self.condition.to_dict() if self.condition is not None else None,
+            "update": self.update.to_dict() if self.update is not None else None,
+            "body": self.body.to_dict(),
+        }
+
+    def __repr__(self):
+        """Return developer-friendly string representation of For."""
+        return f"For({self.init}, {self.condition}, {self.update}, {self.body})"
+
+    def __eq__(self, other):
+        """Check equality with another For node."""
+        return (
+            isinstance(other, For)
+            and self.init == other.init
+            and self.condition == other.condition
+            and self.update == other.update
             and self.body == other.body
         )

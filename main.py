@@ -53,6 +53,17 @@ def parse_arguments():
         action="store_true",
         help="Export full compilation pipeline results as a single JSON object",
     )
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="Launch the IRGen student web learning portal server",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port for the student web learning portal server (default: 8000)",
+    )
     return parser.parse_args()
 
 
@@ -107,6 +118,12 @@ def main():
     Run the IRGen pipeline on input source code according to CLI flags.
     """
     args = parse_arguments()
+
+    if args.serve:
+        from server import run_server
+        run_server(port=args.port)
+        return
+
     code = read_source(args.file, args.json)
 
     try:

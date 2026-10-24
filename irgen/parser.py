@@ -19,7 +19,7 @@ Phase 2 grammar rules added:
 """
 
 from irgen.ast_nodes import (
-    Assignment, BinaryExpression, Block, Identifier, If,
+    Assignment, BinaryExpression, Block, For, Identifier, If,
     Number, Program, While,
 )
 from irgen.tac import is_temp
@@ -150,6 +150,8 @@ class Parser:
             return self.if_stmt()
         elif tok_type == 'KEYWORD' and tok_val == 'while':
             return self.while_stmt()
+        elif tok_type == 'KEYWORD' and tok_val == 'for':
+            return self.for_stmt()
         elif tok_type == 'KEYWORD' and tok_val == 'else':
             # 'else' can only follow an if-body; encountering it here is an error
             raise SyntaxError("'else' without a preceding 'if'")
@@ -239,6 +241,48 @@ class Parser:
 
         return While(cond, body)
 
+    def for_stmt(self):
+        """
+        Parse a for loop statement.
+        Grammar: for_stmt -> 'for' '(' (assignment_expr)? ';' condition? ';' (assignment_expr)? ')' block
+
+        Returns:
+            For: AST node for the loop.
+
+        Raises:
+            SyntaxError: If '(' or ')' around loop header is missing, or if the
+                         semicolons are missing, or if the loop body block is absent.
+        """
+        self.consume('KEYWORD', 'for')
+        self.consume('LPAREN', '(')
+
+        # 1. Initialization (optional)
+        init = None
+        if self.peek() is not None and self.peek()[0] != 'SEMICOLON':
+            init = self.assignment_expr()
+        self.consume('SEMICOLON', ';')
+
+        # 2. Condition (optional)
+        condition = None
+        if self.peek() is not None and self.peek()[0] != 'SEMICOLON':
+            condition = self.condition()
+        self.consume('SEMICOLON', ';')
+
+        # 3. Update (optional)
+        update = None
+        if self.peek() is not None and self.peek()[0] != 'RPAREN':
+            update = self.assignment_expr()
+            if self.peek() is not None and self.peek()[0] == 'SEMICOLON':
+                self.consume('SEMICOLON', ';')
+        self.consume('RPAREN', ')')
+
+        # 4. Body block
+        if self.peek() is None or self.peek()[0] != 'LBRACE':
+            raise SyntaxError("Expected '{' after 'for (...)')")
+        body = self.block()
+
+        return For(init, condition, update, body)
+
     def condition(self):
         """
         Parse a condition (an expression optionally followed by a RELOP and another expression).
@@ -262,6 +306,22 @@ class Parser:
     # Phase 1: expression rules (unchanged)
     # ------------------------------------------------------------------
 
+    def assignment_expr(self):
+        """
+        Parse an assignment without a trailing semicolon (e.g. for loop init/update).
+        Grammar: assignment_expr -> ID '=' expression
+
+        Returns:
+            Assignment: AST node for the assignment.
+        """
+        id_token = self.consume('ID')
+        name = id_token[1]
+        if is_temp(name):
+            raise SyntaxError(f"'{name}' is reserved for compiler temporaries")
+        self.consume('ASSIGN', '=')
+        expr_node = self.expression()
+        return Assignment(name, expr_node)
+
     def assignment(self):
         """
         Parse an assignment statement.
@@ -273,14 +333,9 @@ class Parser:
         Raises:
             SyntaxError: If the ID, '=', expression, or ';' is missing.
         """
-        id_token = self.consume('ID')
-        name = id_token[1]
-        if is_temp(name):
-            raise SyntaxError(f"'{name}' is reserved for compiler temporaries")
-        self.consume('ASSIGN', '=')
-        expr_node = self.expression()
+        assign_node = self.assignment_expr()
         self.consume('SEMICOLON', ';')
-        return Assignment(name, expr_node)
+        return assign_node
 
     def expression(self):
         """
